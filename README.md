@@ -37,8 +37,14 @@ Have you ever used the sleep command, only to be left wishing you could actually
 >As an example, using the bell character in a bash-like environment (might not be supported everywhere):
 >
 >`sleepview -m 1.5 && echo '\a'`
+>
 >Or
+>
 >`sleepview -m 1 30 && echo '\a'`
+>
+>Or
+>
+>`sleepview -t 1:30 && echo '\a'`
 >
 >This sets a timer for one and a half minutes, and prints the bell character to standard output assuming that it is not cancelled. If the syntax is wrong or the program is interrupted with ctrl-c or the kill command, it should not continue to the `echo` command due to the `&&` between the commands. In the case of incorrect syntax, the program panics internally and throws a `101` exit code as opposed to the success code of `0` which is required to continue past the `&&`. This is important, because you (probably) wouldn't want your alarm / chime to sound before the correct time.
 >
@@ -48,6 +54,9 @@ Have you ever used the sleep command, only to be left wishing you could actually
 >>    sleepview "$@" && your_alarm_command
 >>}
 >>```
+
+## Planned Features
+- Add ability to parse arguments in the same way as GNU sleep, that is, `sleepview NUMBER[SUFFIX]` where the suffix can be nothing/'s' for seconds, 'm' for minutes, 'h' for hours, and 'd' for days.
 
 ## Development
 If you have cloned the repo, debug information can be enabled by setting the enviroment variable `RUST_LOG` to `debug`. E.g. `RUST_LOG=debug cargo run -- 1.1`
