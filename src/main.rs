@@ -245,14 +245,16 @@ fn main() -> () {
             if possible_input_idx == 0 {
                 target += match clapargs.time[0].clone().parse::<f64>() {
                     Ok(num) => (num * 1000.0) as i128,
-                    Err(_) => target,
+                    Err(_) => { set_error_panic!("Error: invalid number as default argument (seconds).");
+                                panic!(); },
                 };
             } else {
                 target += match possible_switches[possible_input_idx-1].parse::<f64>() {
                     Ok(num) => { { log::debug!("possible_input_idx = {:?}", &possible_input_idx); }
                                  { log::debug!("provided value = {num}"); }
                                  (num * 1000.0) as i128 * factors[possible_input_idx] },
-                    Err(_) => target,
+                    Err(_) => { set_error_panic!("Error: invalid number for provided option.");
+                                panic!(); },
                 };
 
             } 
