@@ -151,7 +151,7 @@ fn format_time(millis: i128) -> String {
         let mut val_ptr = &mut seconds;
         if remaining >= 1000 * 60 * 60 * 24 {
             divisor = 1000 * 60 * 60 * 24;
-            val_ptr = &mut days
+            val_ptr = &mut days;
         }
         else if remaining >= 1000 * 60 * 60 {
             divisor = 1000 * 60 * 60;
@@ -245,16 +245,14 @@ fn main() -> () {
             if possible_input_idx == 0 {
                 target += match clapargs.time[0].clone().parse::<f64>() {
                     Ok(num) => (num * 1000.0) as i128,
-                    Err(_) => { set_error_panic!("Error: invalid number as default argument (seconds).");
-                                panic!(); },
+                    Err(_) => { 0 },
                 };
             } else {
                 target += match possible_switches[possible_input_idx-1].parse::<f64>() {
                     Ok(num) => { { log::debug!("possible_input_idx = {:?}", &possible_input_idx); }
                                  { log::debug!("provided value = {num}"); }
                                  (num * 1000.0) as i128 * factors[possible_input_idx] },
-                    Err(_) => { set_error_panic!("Error: invalid number for provided option.");
-                                panic!(); },
+                    Err(_) => { 0 },
                 };
 
             } 
