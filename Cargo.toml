@@ -1,0 +1,27 @@
+[package]
+name = "sleepview"
+version = "1.1.1"
+edition = "2021"
+authors = ["Iona Erofeeff <iedevfeedback@gmail.com>"]
+rust-version = "1.78.0"
+description = "Visible timer countdown in the terminal."
+readme = "README.md"
+license = "MIT"
+keywords = ["countdown","timer","terminal","console"]
+categories = ["command-line-utilities"]
+
+[profile.release]
+strip = "symbols"
+opt-level = "z"
+lto = true
+
+[profile.dev]
+strip = true
+
+[dependencies]
+clap = { version = "4.5.8", features = ["derive"] }
+crossterm = "0.27.0"
+env_logger = "0.11.3"
+itertools = "0.13.0"
+log = { version = "0.4.22", features = ["max_level_debug"] }
+
