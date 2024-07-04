@@ -2,9 +2,11 @@ Have you ever used the sleep command, only to be left wishing you could actually
 
 # Usage
 
->`sleepview [SWITCH] DURATION`
+>`sleepview [SWITCH] DURATION ...` or `sleepview DURATION[SUFFIX]...`
 
->DURATION: the amount of time to count down in seconds. Can be specified in combination with switches, or omitted entirely with switches present. Using a timestamp disables other switches.
+>DURATION: the amount of time to count down in seconds. Can be specified in combination with switches, or omitted entirely with switches present. Using a timestamp disables other switches, and only one of each other switch is allowed. Multiple non-timestamp durations will be added together.
+
+>SUFFIX: can be 's', 'm', 'h', or 'd' for seconds, minutes, hours or days. Multiple durations of any kind will be added together. This is considered a fallback method, and only works properly without switches present.
 
 >SWITCHES:
 
@@ -46,6 +48,10 @@ Have you ever used the sleep command, only to be left wishing you could actually
 >
 >`sleepview -t 1:30 && echo '\a'`
 >
+>Or
+>
+>`sleepview 1m 30s && echo '\a'` ('s' is optional here)
+>
 >This sets a timer for one and a half minutes, and prints the bell character to standard output assuming that it is not cancelled. If the syntax is wrong or the program is interrupted with ctrl-c or the kill command, it should not continue to the `echo` command due to the `&&` between the commands. In the case of incorrect syntax, the program panics internally and throws a `101` exit code as opposed to the success code of `0` which is required to continue past the `&&`. This is important, because you (probably) wouldn't want your alarm / chime to sound before the correct time.
 >
 >To use it regularly, a shell function along the lines of this might be in order:
@@ -56,10 +62,10 @@ Have you ever used the sleep command, only to be left wishing you could actually
 >>```
 
 ## Planned Features
-- Add ability to parse arguments in the same way as GNU sleep, that is, `sleepview NUMBER[SUFFIX]` where the suffix can be nothing/'s' for seconds, 'm' for minutes, 'h' for hours, and 'd' for days.
+ - [x] Add ability to parse arguments in the same way as GNU sleep, that is, `sleepview NUMBER[SUFFIX]` where the suffix can be nothing/'s' for seconds, 'm' for minutes, 'h' for hours, and 'd' for days.
 
 ## Development
-If you have cloned the repo, debug information can be enabled by setting the enviroment variable `RUST_LOG` to `debug`. E.g. `RUST_LOG=debug cargo run -- 1.1`
+If you have cloned the repo, debug information can be enabled by setting the environment variable `RUST_LOG` to `debug`. e.g. `RUST_LOG=debug cargo run -- 1.1`
 
 ### Feedback
 Relevant suggestions, questions, concerns, and/or issues may be directed to iedevfeedback@gmail.com

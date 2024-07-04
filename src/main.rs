@@ -4,6 +4,8 @@
 use std::env::args;
 use std::time::Instant;
 use std::io::{stdout, Write};
+#[cfg(debug_assertions)]
+use std::fmt;
 
 use clap::Parser;
 //use itertools::*;
@@ -11,7 +13,6 @@ use clap::Parser;
 #[derive(Parser, Debug)]
 #[command(disable_help_flag(true))]
 struct Args {
-
     /// Switches
     #[arg(short, required(false), default_value_t=("0".to_string()))]
     minutes: String,
@@ -23,8 +24,23 @@ struct Args {
     show_help: bool,
     #[arg(short = 't', required(false), default_value_t=(false))]
     timestamp: bool,
-    #[arg(required(false), default_value_t=("0".to_string()))]
-    time: String,
+    #[arg(required(false), default_values_t=(vec!["0".to_string()]))]
+    time: Vec<String>,
+}
+
+#[cfg(debug_assertions)]
+impl fmt::Display for Args {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        println!("Args {{\n minutes: {:?}\n hours: {:?}\n days: {:?}\n show_help: {:?}\n timestamp: {:?}\n",
+            self.minutes,
+            self.hours,
+            self.days,
+            self.show_help,
+            self.timestamp
+        );
+
+        write!(f, " time: {}\n}}", self.time[0])
+    }
 }
 
 use crossterm::{
@@ -79,7 +95,7 @@ fn parse_timestamp(timestamp: String) -> i128 {
             milliseconds += "0";
         }
 
-        { log::debug!("{:?}", &milliseconds); }
+        { log::debug!("timestamp milliseconds: {:?}", &milliseconds); }
 
         ms += match milliseconds.parse::<u128>() {
             Ok(num) => num,
@@ -108,7 +124,7 @@ fn parse_timestamp(timestamp: String) -> i128 {
                             panic!(); },
             };
 
-            { log::debug!("{:?}", &*values[pointer_idx]); }
+            { log::debug!("timestamp: set number to {:?}", &*values[pointer_idx]); }
 
             pointer_idx += 1;
         }
@@ -155,8 +171,11 @@ fn format_time(millis: i128) -> String {
     format!("[{:0>2}:]{:0>2}:{:0>2}:{:0>2}.{:0>3}", days, hours, minutes, seconds, remaining)
 }
 
-const HELP_MSG: &str = "Usage: `sleepview [SWITCH] DURATION`
- DURATION: the amount of time to count down in seconds. Can be specified in combination with switches, or omitted entirely with switches present. Using a timestamp disables other switches.
+const HELP_MSG: &str = "Usage: `sleepview [SWITCH] DURATION ...` or `sleepview DURATION[SUFFIX]...`
+ DURATION: the amount of time to count down in seconds. Can be specified in combination with switches, or omitted entirely with switches present. Using a timestamp disables other switches, and only one of each other switch is allowed. Multiple non-timestamp durations will be added together.
+
+ SUFFIX: can be 's', 'm', 'h', or 'd' for seconds, minutes, hours or days. Multiple durations of any kind will be added together. This is considered a fallback method, and only works properly without switches present.
+
  SWITCHES:
 -h :\tShow this help message and exit.
 -d :\tSpecify days.
@@ -176,7 +195,8 @@ fn main() -> () {
     // Primarily initializes `time_spent`
     let mut time_spent = start.elapsed().as_millis();
 
-    if args().count() < 2 {
+    let osargs = args().collect::<Vec<String>>();
+    if osargs.len() < 2 {
         set_error_panic!("Error: needs at least one argument to specify duration.");
         panic!();
     }
@@ -186,7 +206,7 @@ fn main() -> () {
         panic!()
     }
     */
-    { log::debug!("{:?}", Args::parse()); }
+    { log::debug!("{:#?}", Args::parse()); }
 
     let clapargs = match Args::try_parse() {
         Ok(args) => {
@@ -206,9 +226,9 @@ fn main() -> () {
         panic!()
     };
 
-    let possible_switches = vec![clapargs.minutes, clapargs.hours, clapargs.days];
+    let possible_switches = [clapargs.minutes, clapargs.hours, clapargs.days];
 
-    let factors = vec![
+    let factors = [
         1,
         60, 
         60 * 60, 
@@ -218,18 +238,19 @@ fn main() -> () {
 
     let mut target = 0;
 
+    // Clap argument parsing
     if !clapargs.timestamp {
         for possible_input_idx in 0..=possible_switches.len() {
 
             if possible_input_idx == 0 {
-                target += match clapargs.time.parse::<f64>() {
+                target += match clapargs.time[0].clone().parse::<f64>() {
                     Ok(num) => (num * 1000.0) as i128,
                     Err(_) => target,
                 };
             } else {
                 target += match possible_switches[possible_input_idx-1].parse::<f64>() {
-                    Ok(num) => { { log::debug!("idx = {:?}", &possible_input_idx); }
-                                 { log::debug!("num = {num}"); }
+                    Ok(num) => { { log::debug!("possible_input_idx = {:?}", &possible_input_idx); }
+                                 { log::debug!("provided value = {num}"); }
                                  (num * 1000.0) as i128 * factors[possible_input_idx] },
                     Err(_) => target,
                 };
@@ -239,10 +260,53 @@ fn main() -> () {
 
     } else {
         // should be last item in possible_switches
-        { log::debug!("{:?} {:?}", "Parsing timestamp.", clapargs.time); }
-        target = parse_timestamp(clapargs.time);
+        { log::debug!("{:?} {:?}", "Parsing timestamp.", clapargs.time[0]); }
+        target = parse_timestamp(clapargs.time[0].clone());
     }
 
+    // Fallback parsing -- GNU sleep imitation
+    if target == 0i128 {
+        let mut factor_idx;
+
+        { log::debug!("Using fallback arguments. {:?}", &osargs[1..]); }
+
+        for arg in (&osargs[1..]).iter() {
+            let len = arg.chars().count();
+            target += ( match arg.parse::<f64>() {
+                Ok(num) => { factor_idx = 0; num },
+                _ => {
+                    { log::debug!("truncated argument {:?}", &arg[..len-1]); }
+                    match (&arg[..len-1]).to_string().parse::<f64>() {
+                        Ok(num) => {
+                            { log::debug!("num ok: {:?}",num); }
+                            if let Some(suffix) = arg.chars().nth(len-1) {
+                                { log::debug!("suffix is {:?}",suffix); }
+                                match suffix {
+                                    's' | 'S' => { factor_idx = 0; num },
+                                    'm' | 'M' => { factor_idx = 1; num },
+                                    'h' | 'H' => { factor_idx = 2; num },
+                                    'd' | 'D' => { factor_idx = 3; num },
+                                    _ => { set_error_panic!("Error: invalid suffix.");
+                                          { log::debug!("unrecognized suffix {:?}", &suffix); }
+                                            panic!(); },
+                                }
+                            } else {
+                                set_error_panic!("Error: argument somehow has a length of zero?");
+                                panic!();
+                            }
+                        },
+                        Err(_) => { set_error_panic!("Error: invalid number.");
+                                    panic!(); },
+                    }
+                },
+            } * 1000.0) as i128 * factors[factor_idx];
+        }
+    }
+
+    { log::debug!("total target time is {:?} milliseconds", target); }
+
+
+    // MAIN LOOP
     let mut time_over = false;
     while time_spent as i128 <= target as i128 + 100i128 {
         
