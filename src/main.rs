@@ -7,6 +7,13 @@ use std::io::{stdout, Write};
 #[cfg(debug_assertions)]
 use std::fmt;
 
+use crossterm::{
+    cursor::{MoveToColumn, MoveUp},
+    style::{SetForegroundColor, Color::{*}},
+    terminal::{Clear, ClearType::UntilNewLine},
+    QueueableCommand
+};
+
 use clap::Parser;
 //use itertools::*;
 
@@ -14,6 +21,10 @@ use clap::Parser;
 #[command(disable_help_flag(true))]
 struct Args {
     /// Switches
+    #[arg(short, required(false), default_value_t=false)]
+    full: bool,
+    #[arg(short, required(false), default_value_t=false)]
+    json: bool,
     #[arg(short, required(false), default_value_t=("0".to_string()))]
     minutes: String,
     #[arg(short = 'H', required(false), default_value_t=("0".to_string()))]
@@ -31,23 +42,17 @@ struct Args {
 #[cfg(debug_assertions)]
 impl fmt::Display for Args {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        println!("Args {{\n minutes: {:?}\n hours: {:?}\n days: {:?}\n show_help: {:?}\n timestamp: {:?}\n",
+        write!(f, "Args {{\n minutes: {:?}\n hours: {:?}\n days: {:?}\n show_help: {:?}\n timestamp: {:?}\n",
             self.minutes,
             self.hours,
             self.days,
             self.show_help,
             self.timestamp
-        );
+        )?;
 
         write!(f, " time: {}\n}}", self.time[0])
     }
 }
-
-use crossterm::{
-    cursor::MoveToColumn,
-    terminal::{Clear, ClearType::UntilNewLine},
-    QueueableCommand
-};
 
 macro_rules! set_panic {
     ($msg:expr) => {
@@ -63,8 +68,21 @@ macro_rules! set_error_panic {
     }
 }
 
-fn parse_timestamp(timestamp: String) -> i128 {
+fn remove_arg(args: &mut Vec<String>, switch: &str) {
+    for i in 0..args.len() {
+        if args[i] == switch {
+            let _ = args.remove(i);
+            break;
+        }
+    }
+}
 
+// format_width should be passed in as num_fields
+fn produce_json(values: [i128; 5], num_fields: usize) {
+    todo!();
+}
+
+fn parse_timestamp(timestamp: String) -> i128 {
 
     let mut ms = 0;
     let mut sec = 0;
@@ -138,7 +156,7 @@ fn parse_timestamp(timestamp: String) -> i128 {
     (days * 1000 * 60 * 60 * 24) ) as i128
 }
 
-fn format_time(millis: i128) -> String {
+fn format_time(millis: i128, format_width: usize, as_json: bool) {
 
     let mut remaining = millis;
     let mut days = 0;
@@ -146,9 +164,11 @@ fn format_time(millis: i128) -> String {
     let mut minutes = 0;
     let mut seconds = 0;
 
+
     while remaining >= 1000 {
         let mut divisor = 1000;
         let mut val_ptr = &mut seconds;
+
         if remaining >= 1000 * 60 * 60 * 24 {
             divisor = 1000 * 60 * 60 * 24;
             val_ptr = &mut days;
@@ -167,11 +187,43 @@ fn format_time(millis: i128) -> String {
         remaining -= whole_quotient * divisor;
         *val_ptr += whole_quotient;
     }
+
+    set_error_panic!("Failed inside `format_time()`");
  
-    format!("[{:0>2}:]{:0>2}:{:0>2}:{:0>2}.{:0>3}", days, hours, minutes, seconds, remaining)
+    let values = [remaining, seconds, minutes, hours, days];
+
+    // Output json OR continue with normal formatting
+    if as_json {
+        produce_json(values, format_width);
+        return ();
+    }
+
+    let _ = stdout().queue(SetForegroundColor(Reset));
+    for i in (0..format_width).rev() {
+        match i {
+            0 => { // millis
+                //let _ = stdout().queue(SetForegroundColor(Rgb{r:180,g:180,b:180}));
+                let _ = stdout().queue(SetForegroundColor(Grey));
+                print!(".{:0>3}", values[i]);
+            },
+            1 => { // seconds
+                print!("{:0>2}", values[i]);
+            },
+            4 => { // days
+                print!("[{:0>2}:]", values[i]);
+            },
+            _ => { // minutes, hours
+                print!("{:0>2}:", values[i]);
+            },
+        }
+    }
+
+
+//    format!("[{:0>2}:]{:0>2}:{:0>2}:{:0>2}.{:0>3}", days, hours, minutes, seconds, remaining)
 }
 
-const HELP_MSG: &str = "Usage: `sleepview [SWITCH] DURATION ...` or `sleepview DURATION[SUFFIX]...`
+const HELP_MSG: &str = "Usage: `sleepview [OPTIONS] [SWITCH] DURATION ...` or [OPTIONS] `sleepview DURATION[SUFFIX]...`
+
  DURATION: the amount of time to count down in seconds. Can be specified in combination with switches, or omitted entirely with switches present. Using a timestamp disables other switches, and only one of each other switch is allowed. Multiple non-timestamp durations will be added together.
 
  SUFFIX: can be 's', 'm', 'h', or 'd' for seconds, minutes, hours or days. Multiple durations of any kind will be added together. This is considered a fallback method, and only works properly without switches present.
@@ -181,7 +233,12 @@ const HELP_MSG: &str = "Usage: `sleepview [SWITCH] DURATION ...` or `sleepview D
 -d :\tSpecify days.
 -H :\tSpecify hours.
 -m :\tSpecify minutes.
--t :\tSpecify a timestamp, in the form (D)D:(H)H:(M)M:(S)S(.DEC) -- days, hours, minutes, seconds, decimal portion.";
+-t :\tSpecify a timestamp, in the form (D)D:(H)H:(M)M:(S)S(.DEC) -- days, hours, minutes, seconds, decimal portion.
+
+ OPTIONS:
+-f :\t(full) Show full width of timestamp, regardless of target time. Without this option, fields in the display format that will always show zero will be omitted.
+(-j :\t(json) Output data as json.) UNIMPLEMENTED";
+
 
 fn main() -> () {
    
@@ -195,7 +252,7 @@ fn main() -> () {
     // Primarily initializes `time_spent`
     let mut time_spent = start.elapsed().as_millis();
 
-    let osargs = args().collect::<Vec<String>>();
+    let mut osargs = args().collect::<Vec<String>>();
     if osargs.len() < 2 {
         set_error_panic!("Error: needs at least one argument to specify duration.");
         panic!();
@@ -206,6 +263,7 @@ fn main() -> () {
         panic!()
     }
     */
+
     { log::debug!("{:#?}", Args::parse()); }
 
     let clapargs = match Args::try_parse() {
@@ -226,9 +284,19 @@ fn main() -> () {
         panic!()
     };
 
+    // remove from argument list as to not interfere with fallback parsing
+    if clapargs.json {
+        remove_arg(&mut osargs, "-j");
+        set_error_panic!("Error: sorry, but json is currently unsupported.");
+        panic!();
+    }
+    if clapargs.full {
+        remove_arg(&mut osargs, "-f");
+    }
+
     let possible_switches = [clapargs.minutes, clapargs.hours, clapargs.days];
 
-    let factors = [
+    let factors: [i128; 4] = [
         1,
         60, 
         60 * 60, 
@@ -275,19 +343,27 @@ fn main() -> () {
             target += ( match arg.parse::<f64>() {
                 Ok(num) => { factor_idx = 0; num },
                 _ => {
+
                     { log::debug!("truncated argument {:?}", &arg[..len-1]); }
+
                     match (&arg[..len-1]).to_string().parse::<f64>() {
                         Ok(num) => {
+
                             { log::debug!("num ok: {:?}",num); }
-                            if let Some(suffix) = arg.chars().nth(len-1) {
+
+                            if let Some(suffix) = arg.chars().nth(len-1) { // 
+
                                 { log::debug!("suffix is {:?}",suffix); }
+
                                 match suffix {
                                     's' | 'S' => { factor_idx = 0; num },
                                     'm' | 'M' => { factor_idx = 1; num },
                                     'h' | 'H' => { factor_idx = 2; num },
                                     'd' | 'D' => { factor_idx = 3; num },
                                     _ => { set_error_panic!("Error: invalid suffix.");
+
                                           { log::debug!("unrecognized suffix {:?}", &suffix); }
+
                                             panic!(); },
                                 }
                             } else {
@@ -299,32 +375,57 @@ fn main() -> () {
                                     panic!(); },
                     }
                 },
-            } * 1000.0) as i128 * factors[factor_idx];
+            } * 1000.0 ) as i128 * factors[factor_idx];
         }
     }
 
     { log::debug!("total target time is {:?} milliseconds", target); }
 
+    let format_width =
+        if clapargs.full {
+            5
+        } else {
+            let mut width = 2;
+            for i in 0..factors.len() {
+                if target > factors[i] * 1000 {
+                    width = i+2;
+                }
+            }
+            width
+        };
 
+    { log::debug!("format_width = {}", format_width); }
+    set_error_panic!("Unknown error.");
+    
     // MAIN LOOP
     let mut time_over = false;
-    while time_spent as i128 <= target as i128 + 100i128 {
+    loop {
         
         let _ = stdout().queue(MoveToColumn(0));
 
         let difference = target as i128-time_spent as i128;
+
         if difference < 0i128 {
-            print!("{}", format_time(0i128));
+            format_time(0i128, format_width, clapargs.json);
+            let _ = stdout().queue(Clear(UntilNewLine));
+            print!("\n",);
+            #[cfg(target_os = "windows")]
+            print!("\r");
             time_over = true;
 
         } else {
-            print!("{}", format_time(difference));
+            format_time(difference, format_width, clapargs.json);
+            let _ = stdout().queue(Clear(UntilNewLine));
+            print!("\n");
+            #[cfg(target_os = "windows")]
+            print!("\r");
+
         }
         
         let _ = stdout().queue(Clear(UntilNewLine));
-
         let _ = stdout().flush();
-
+        let _ = stdout().queue(MoveUp(1));
+       
         if time_over { break; }
 
         std::thread::sleep(std::time::Duration::from_micros(800));

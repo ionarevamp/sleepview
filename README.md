@@ -2,7 +2,7 @@ Have you ever used the sleep command, only to be left wishing you could actually
 
 # Usage
 
->`sleepview [SWITCH] DURATION ...` or `sleepview DURATION[SUFFIX]...`
+>`sleepview [OPTIONS] [SWITCH] DURATION ...` or [OPTIONS] `sleepview DURATION[SUFFIX]...`
 
 >DURATION: the amount of time to count down in seconds. Can be specified in combination with switches, or omitted entirely with switches present. Using a timestamp disables other switches, and only one of each other switch is allowed. Multiple non-timestamp durations will be added together.
 
@@ -19,6 +19,12 @@ Have you ever used the sleep command, only to be left wishing you could actually
 >-m :	Specify minutes.
 
 >-t :   Specify a timestamp, in the form (D)D:(H)H:(M)M:(S)S(.DEC) -- days, hours, minutes, seconds, decimal portion.
+
+>OPTIONS:
+
+>-f :\t(full) Show full width of timestamp, regardless of target time. Without this option, fields in the display format that will always show zero will be omitted.
+
+>(-j :\t(json) Output data as json.) UNIMPLEMENTED
 
 # Installation
 
@@ -63,6 +69,7 @@ Have you ever used the sleep command, only to be left wishing you could actually
 
 ## Planned Features
  - [x] Add ability to parse arguments in the same way as GNU sleep, that is, `sleepview NUMBER[SUFFIX]` where the suffix can be nothing/'s' for seconds, 'm' for minutes, 'h' for hours, and 'd' for days.
+ - [ ] Add json output support, for better program interoperability.
 
 ## Development
 If you have cloned the repo, debug information can be enabled by setting the environment variable `RUST_LOG` to `debug`. e.g. `RUST_LOG=debug cargo run -- 1.1`
