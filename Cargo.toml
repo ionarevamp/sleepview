@@ -1,6 +1,6 @@
 [package]
 name = "sleepview"
-version = "1.2.101"
+version = "1.2.5"
 edition = "2021"
 authors = ["Iona Erofeeff <iedevfeedback@gmail.com>"]
 rust-version = "1.78.0"
