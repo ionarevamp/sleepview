@@ -21,6 +21,8 @@ use clap::Parser;
 #[command(disable_help_flag(true))]
 struct Args {
     /// Switches
+    #[arg(short, required(false), default_value_t=(false))]
+    no_newline: bool,
     #[arg(short, required(false), default_value_t=false)]
     full: bool,
     #[arg(short, required(false), default_value_t=false)]
@@ -66,6 +68,13 @@ macro_rules! set_error_panic {
     ($msg:expr) => {
         set_panic!(String::from(HELP_MSG) + "\n" + $msg);
     }
+}
+
+fn new_line() {
+    print!("\n");
+    #[cfg(target_os = "windows")]
+    print!("\r");
+
 }
 
 fn remove_arg(args: &mut Vec<String>, switch: &str) {
@@ -240,7 +249,7 @@ const HELP_MSG: &str = "Usage: `sleepview [OPTIONS] [SWITCH] DURATION ...` or [O
 (-j :\t(json) Output data as json.) UNIMPLEMENTED";
 
 
-fn main() -> () {
+fn main() {
    
     // Should be the first thing done for maximum accuracy
     let start = Instant::now();
@@ -408,17 +417,12 @@ fn main() -> () {
         if difference < 0i128 {
             format_time(0i128, format_width, clapargs.json);
             let _ = stdout().queue(Clear(UntilNewLine));
-            print!("\n",);
-            #[cfg(target_os = "windows")]
-            print!("\r");
-            time_over = true;
+            new_line();            time_over = true;
 
         } else {
             format_time(difference, format_width, clapargs.json);
             let _ = stdout().queue(Clear(UntilNewLine));
-            print!("\n");
-            #[cfg(target_os = "windows")]
-            print!("\r");
+            new_line();
 
         }
         
@@ -433,6 +437,10 @@ fn main() -> () {
 
     }
 
-    println!();
-    ()
+    let _ = stdout().queue(SetForegroundColor(Reset));
+    if clapargs.no_newline {
+        let _ = stdout().flush();
+    } else {
+        new_line();
+    }
 }
