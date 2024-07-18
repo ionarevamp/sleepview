@@ -1,6 +1,8 @@
 
 #![allow(unused_parens)]
 
+mod json;
+
 use std::env::args;
 use std::time::Instant;
 use std::io::{stdout, Write};
@@ -13,6 +15,8 @@ use crossterm::{
     terminal::{Clear, ClearType::UntilNewLine},
     QueueableCommand
 };
+
+use json::produce_json;
 
 use clap::Parser;
 //use itertools::*;
@@ -84,11 +88,6 @@ fn remove_arg(args: &mut Vec<String>, switch: &str) {
             break;
         }
     }
-}
-
-// format_width should be passed in as num_fields
-fn produce_json(values: [i128; 5], num_fields: usize) {
-    todo!();
 }
 
 fn parse_timestamp(timestamp: String) -> i128 {
@@ -204,7 +203,7 @@ fn format_time(millis: i128, format_width: usize, as_json: bool) {
     // Output json OR continue with normal formatting
     if as_json {
         produce_json(values, format_width);
-        return ();
+        return;
     }
 
     let _ = stdout().queue(SetForegroundColor(Reset));
@@ -246,7 +245,8 @@ const HELP_MSG: &str = "Usage: `sleepview [OPTIONS] [SWITCH] DURATION ...` or `s
 
  OPTIONS:
 -f :\t(full) Show full width of timestamp, regardless of target time. Without this option, fields in the display format that will always show zero will be omitted.
-(-j :\t(json) Output data as json.) UNIMPLEMENTED";
+-n :\t(no_newline) Do not append a new line when the program finishes naturally -- this generally causes the output to be overwritten by either the prompt or any other output on the same line as the countdown output.
+-j :\t(json) Output data as json. Not recommended for normal use. Compatible with -f option.";
 
 
 fn main() {
@@ -296,8 +296,8 @@ fn main() {
     // remove from argument list as to not interfere with fallback parsing
     if clapargs.json {
         remove_arg(&mut osargs, "-j");
-        set_error_panic!("Error: sorry, but json is currently unsupported.");
-        panic!();
+        //set_error_panic!("Error: sorry, but json is currently unsupported.");
+        //panic!();
     }
     if clapargs.full {
         remove_arg(&mut osargs, "-f");
@@ -423,12 +423,18 @@ fn main() {
             format_time(difference, format_width, clapargs.json);
             let _ = stdout().queue(Clear(UntilNewLine));
             new_line();
-
         }
-        
-        let _ = stdout().queue(Clear(UntilNewLine));
+
+
+        if !clapargs.json {
+            let _ =
+                stdout().queue(Clear(UntilNewLine));
+        }
         let _ = stdout().flush();
-        let _ = stdout().queue(MoveUp(1));
+        if !clapargs.json {
+            let _ = stdout().queue(MoveUp(1));
+        }
+
        
         if time_over { break; }
 

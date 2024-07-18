@@ -24,7 +24,9 @@ Have you ever used the sleep command, only to be left wishing you could actually
 
 >-f :\t(full) Show full width of timestamp, regardless of target time. Without this option, fields in the display format that will always show zero will be omitted.
 
->(-j :\t(json) Output data as json.) UNIMPLEMENTED
+>-n :\t(no_newline) Do not append a new line when the program finishes naturally -- this generally causes the output to be overwritten by either the prompt or any other output on the same line as the countdown output.
+
+>-j :\t(json) Output data as json. Not recommended for normal use. Compatible with -f option.
 
 # Installation
 
