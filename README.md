@@ -2,7 +2,7 @@ Have you ever used the sleep command, only to be left wishing you could actually
 
 # Usage
 
->`sleepview [OPTIONS] [SWITCH] DURATION ...` or [OPTIONS] `sleepview DURATION[SUFFIX]...`
+>`sleepview [OPTIONS] [SWITCH] DURATION ...` or `sleepview [OPTIONS] DURATION[SUFFIX]...`
 
 >DURATION: the amount of time to count down in seconds. Can be specified in combination with switches, or omitted entirely with switches present. Using a timestamp disables other switches, and only one of each other switch is allowed. Multiple non-timestamp durations will be added together.
 
