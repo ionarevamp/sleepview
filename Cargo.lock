@@ -679,7 +679,7 @@ dependencies = [
 
 [[package]]
 name = "sleepview"
-version = "1.2.600"
+version = "1.2.6001"
 dependencies = [
  "clap",
  "crossterm",
