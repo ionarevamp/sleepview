@@ -1,18 +1,19 @@
-
+#![allow(clippy::print_with_newline)]
 #![allow(unused_parens)]
 
 mod json;
+mod help;
 
-use std::env::args;
+use help::*;
+
 use std::time::Instant;
 use std::io::{stdout, Write};
 #[cfg(debug_assertions)]
 use std::fmt;
 
 use crossterm::{
-    cursor::{MoveToColumn, MoveUp},
-    style::{SetForegroundColor, Color::{*}},
-    terminal::{Clear, ClearType::UntilNewLine},
+    cursor::{MoveToColumn, MoveUp, MoveRight},
+    style::{SetForegroundColor, Print, Color::{*}},
     QueueableCommand
 };
 
@@ -39,24 +40,37 @@ struct Args {
     days: String,
     #[arg(short = 'h', required(false), default_value_t=false)]
     show_help: bool,
-    #[arg(short = 't', required(false), default_value_t=(false))]
-    timestamp: bool,
+    #[arg(short = 't', required(false), default_value_t=(String::new()))]
+    timestamp: String,
     #[arg(required(false), default_values_t=(vec!["0".to_string()]))]
     time: Vec<String>,
+    #[arg(short, required(false), default_value_t=200.0)]
+    rate: f64,
+    #[arg(short = 'R', required(false), default_value_t='0')]
+    resolution: char,
+    #[arg(short, required(false), default_value_t=false)]
+    up: bool,
+    #[arg(short, long, required(false), default_value_t=String::new())]
+    output_file: String,
 }
 
 #[cfg(debug_assertions)]
 impl fmt::Display for Args {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "Args {{\n minutes: {:?}\n hours: {:?}\n days: {:?}\n show_help: {:?}\n timestamp: {:?}\n",
+        #[cfg(not(target_os = "windows"))]
+        let new_line = "\n";
+        #[cfg(target_os = "windows")]
+        let new_line = "\r\n";
+        write!(f, "Args {{{5} minutes: {:?}{5} hours: {:?}{5} days: {:?}{5} show_help: {:?}{5} timestamp: {:?}{5}",
             self.minutes,
             self.hours,
             self.days,
             self.show_help,
-            self.timestamp
+            self.timestamp,
+            new_line
         )?;
 
-        write!(f, " time: {}\n}}", self.time[0])
+        write!(f, " time: {}{}}}", self.time[0], new_line)
     }
 }
 
@@ -75,18 +89,29 @@ macro_rules! set_error_panic {
 }
 
 fn new_line() {
-    print!("\n");
     #[cfg(target_os = "windows")]
     print!("\r");
+    print!("\n");
 
 }
 
-fn remove_arg(args: &mut Vec<String>, switch: &str) {
-    for i in 0..args.len() {
-        if args[i] == switch {
-            let _ = args.remove(i);
+fn sleep_minimal(sleep_amount: u64, target: i128, start: Instant) {
+
+    let mut sleep_amount = sleep_amount;
+    loop {
+        if (target * 1000i128 - start.elapsed().as_micros() as i128) < 500i128 {
+            std::thread::sleep(std::time::Duration::from_micros(8000));
+            //std::hint::spin_loop();
             break;
         }
+        if (sleep_amount as i128) < target * 1000i128 - start.elapsed().as_micros() as i128 {
+            std::thread::sleep(std::time::Duration::from_nanos(sleep_amount * 1000u64));
+            break;
+        } else {
+            sleep_amount = (sleep_amount * 12u64) / 13u64;
+        }
+
+        
     }
 }
 
@@ -98,13 +123,13 @@ fn parse_timestamp(timestamp: String) -> i128 {
     let mut hours = 0;
     let mut days = 0;
 
-    let mut values = vec![&mut sec, &mut min, &mut hours, &mut days];
+    let values = [&mut sec, &mut min, &mut hours, &mut days];
     
     let mut split = timestamp
         .split(":")
         .collect::<Vec<&str>>();
-
     split.reverse();
+
     let mut decimal_split = split[0]
         .split(".")
         .collect::<Vec<&str>>();
@@ -114,7 +139,8 @@ fn parse_timestamp(timestamp: String) -> i128 {
     if decimal_split.len() > 2 {
         set_error_panic!("Error: only one decimal point allowed.");
         panic!();
-    } else if decimal_split.len() == 2 {
+    }
+    if decimal_split.len() == 2 {
         let mut milliseconds = decimal_split[0].to_owned();
         
         while milliseconds.chars().count() < 3 {
@@ -142,11 +168,11 @@ fn parse_timestamp(timestamp: String) -> i128 {
 
             *(values[pointer_idx]) = match section.split(".")
                 .collect::<Vec<&str>>()[0]
-                .trim_start_matches(&['[']) // Just in case someone gets the idea to copy the 
-                .trim_end_matches(&[']']) // display format
+                .trim_start_matches(['[']) // Just in case someone gets the idea to copy the 
+                .trim_end_matches([']']) // display format
                 .parse::<u128>() {
-                Ok(num) => num,
-                Err(_) => { set_error_panic!("Error: Invalid timestamp -- use numbers and ':' character only.");
+                    Ok(num) => num,
+                    Err(_) => { set_error_panic!("Error: Invalid timestamp -- use numbers and ':' character only.");
                             panic!(); },
             };
 
@@ -164,13 +190,21 @@ fn parse_timestamp(timestamp: String) -> i128 {
     (days * 1000 * 60 * 60 * 24) ) as i128
 }
 
-fn format_time(millis: i128, format_width: usize, as_json: bool) {
+#[allow(clippy::too_many_arguments)]
+#[inline(always)]
+fn format_time(millis: i128, previous_millis: i128, format_width: usize, resolution: usize, as_json: bool, mut output: impl Write, is_file: bool, first_draw: bool) -> i128 {
 
     let mut remaining = millis;
     let mut days = 0;
     let mut hours = 0;
     let mut minutes = 0;
     let mut seconds = 0;
+
+    let mut prev_remaining = previous_millis;
+    let mut prev_days = 0;
+    let mut prev_hours = 0;
+    let mut prev_minutes = 0;
+    let mut prev_seconds = 0;
 
 
     while remaining >= 1000 {
@@ -191,81 +225,187 @@ fn format_time(millis: i128, format_width: usize, as_json: bool) {
         }
         
         let remainder = remaining % divisor;
-        let whole_quotient = (remaining - remainder) / divisor;
-        remaining -= whole_quotient * divisor;
-        *val_ptr += whole_quotient;
-    }
+        let multiple = remaining - remainder;
+        remaining -= multiple;
 
+        *val_ptr += multiple / divisor;
+    }
+    
+    while prev_remaining >= 1000 {
+        let mut divisor = 1000;
+        let mut val_ptr = &mut prev_seconds;
+
+        if remaining >= 1000 * 60 * 60 * 24 {
+            divisor = 1000 * 60 * 60 * 24;
+            val_ptr = &mut prev_days;
+        }
+        else if remaining >= 1000 * 60 * 60 {
+            divisor = 1000 * 60 * 60;
+            val_ptr = &mut prev_hours;
+        }
+        else if remaining >= 1000 * 60 {
+            divisor = 1000 * 60;
+            val_ptr = &mut prev_minutes;
+        }
+        
+        let remainder = prev_remaining % divisor;
+        let multiple = prev_remaining - remainder;
+        prev_remaining -= multiple;
+
+        *val_ptr += multiple / divisor;
+    }
     set_error_panic!("Failed inside `format_time()`");
  
-    let values = [remaining, seconds, minutes, hours, days];
+    let values = [
+        remaining,
+        seconds,
+        minutes,
+        hours,
+        days
+    ];
+
+    let prev_values = [
+        prev_remaining,
+        prev_seconds,
+        prev_minutes,
+        prev_hours,
+        prev_days
+    ];
 
     // Output json OR continue with normal formatting
     if as_json {
-        produce_json(values, format_width);
-        return;
+        produce_json(values, format_width, resolution, output);
+        return millis;
     }
+    if !is_file {
 
-    let _ = stdout().queue(SetForegroundColor(Reset));
-    for i in (0..format_width).rev() {
-        match i {
-            0 => { // millis
-                //let _ = stdout().queue(SetForegroundColor(Rgb{r:180,g:180,b:180}));
-                let _ = stdout().queue(SetForegroundColor(Grey));
-                print!(".{:0>3}", values[i]);
+        // Essentially, if a field is different or it's the first time printing, print the data,
+        // but otherwise just move the cursor forward
+
+        let _ = output.queue(SetForegroundColor(Reset));
+        for i in (resolution..format_width).rev() {
+            if values[i] != prev_values[i] || first_draw {
+                match i {
+                    0 => { // millis
+                        let _ = output.queue(SetForegroundColor(Grey));
+                        let _ = output.queue(Print(format!(".{:0>3}", values[i])));
+                    },
+                    1 => { // seconds
+                        let _ = output.queue(Print(format!("{:0>2}", values[i])));
+                    },
+                    4 => { // days
+                        let _ = output.queue(Print(format!("[{:0>2}", values[i])));
+                    },
+                    _ => { // minutes, hours
+                        let _ = output.queue(Print(format!("{:0>2}", values[i])));
+                    },
+                }
+                if i != resolution && i > 1 {
+                    let _ = output.queue(Print(":"));
+                }
+                if i == 4 {
+                    let _ = output.queue(Print("]"));
+                }
+            } else {
+                let mut offset = 0;
+                if i > 0 {
+                    offset += 2;
+                }
+                if i > resolution && i > 1 {
+                    offset += 1;
+                }
+                
+                if i == 4 {
+                    offset+= 2;
+                }
+                if offset > 0 {
+                    let _ = output.queue(MoveRight(offset));
+                }
+            }
+        }
+    } else {
+
+        //VERSION 1 -- Avg. total write time: 0.934897854006473ms
+
+        let mut fields: Vec<String> = Vec::with_capacity(format_width-resolution);  
+        for (i, value) in (values[resolution..format_width]).iter().enumerate().rev() {
+            match i+resolution {
+                0 => { // millis
+                    fields.push(format!(".{:0>3}", value));
+                },
+                1 => { // seconds
+                    fields.push(format!("{:0>2}", value));
+                },
+                4 => { // days
+                    fields.push(format!("[{:0>2}:]", value));
+                },
+                _ => { // minutes, hours
+                    fields.push(format!("{:0>2}:", value));
+                },
+            }
+        }
+
+        let _ = write!(output, "{}", fields.concat());
+        
+
+        // VERSION 2 -- Avg. total write time: ~0.9970945037976796ms
+        /* 
+        let max = values.len()-1;
+        match format_width {
+            0..=2 => {
+                let _ = write!(output,
+                        "{:0>2}.{:0>3}",
+                        values[max-1],
+                        values[max]
+                    );
             },
-            1 => { // seconds
-                print!("{:0>2}", values[i]);
+            3 => {
+                let _ = write!(output,
+                        "{:0>2}:{:0>2}.{:0>3}",
+                        values[max-2],
+                        values[max-1],
+                        values[max]
+                    );
             },
-            4 => { // days
-                print!("[{:0>2}:]", values[i]);
-            },
-            _ => { // minutes, hours
-                print!("{:0>2}:", values[i]);
+            4 => {
+                let _ = write!(output,
+                        "{:0>2}:{:0>2}:{:0>2}.{:0>3}",
+                        values[max-3],
+                        values[max-2],
+                        values[max-1],
+                        values[max]
+                    );
+            }
+            _ => {
+                let _ = write!(output,
+                        "[{:0>2}:]{:0>2}:{:0>2}:{:0>2}.{:0>3}",
+                        values[max-4],
+                        values[max-3],
+                        values[max-2],
+                        values[max-1],
+                        values[max]
+                    );
             },
         }
+        */
+        
     }
 
 
 //    format!("[{:0>2}:]{:0>2}:{:0>2}:{:0>2}.{:0>3}", days, hours, minutes, seconds, remaining)
+    millis
 }
-
-const HELP_MSG: &str = "Usage: `sleepview [OPTIONS] [SWITCH] DURATION ...` or `sleepview [OPTIONS] DURATION[SUFFIX]...`
-
- DURATION: the amount of time to count down in seconds. Can be specified in combination with switches, or omitted entirely with switches present. Using a timestamp disables other switches, and only one of each other switch is allowed. Multiple non-timestamp durations will be added together.
-
- SUFFIX: can be 's', 'm', 'h', or 'd' for seconds, minutes, hours or days. Multiple durations of any kind will be added together. This is considered a fallback method, and only works properly without switches present.
-
- SWITCHES:
--h :\tShow this help message and exit.
--d :\tSpecify days.
--H :\tSpecify hours.
--m :\tSpecify minutes.
--t :\tSpecify a timestamp, in the form (D)D:(H)H:(M)M:(S)S(.DEC) -- days, hours, minutes, seconds, decimal portion.
-
- OPTIONS:
--f :\t(full) Show full width of timestamp, regardless of target time. Without this option, fields in the display format that will always show zero will be omitted.
--n :\t(no_newline) Do not append a new line when the program finishes naturally -- this generally causes the output to be overwritten by either the prompt or any other output on the same line as the countdown output.
--j :\t(json) Output data as json. Not recommended for normal use. Compatible with -f option.";
 
 
 fn main() {
    
     // Should be the first thing done for maximum accuracy
     let start = Instant::now();
-    
+   
     #[cfg(debug_assertions)]
     env_logger::init();
     set_panic!(HELP_MSG);
  
-    // Primarily initializes `time_spent`
-    let mut time_spent = start.elapsed().as_millis();
-
-    let mut osargs = args().collect::<Vec<String>>();
-    if osargs.len() < 2 {
-        set_error_panic!("Error: needs at least one argument to specify duration.");
-        panic!();
-    }
     /*
     else if args().count() > 3 {
         set_error_panic!("Error: too many arguments.");
@@ -289,19 +429,12 @@ fn main() {
         },
     };
 
+
     if clapargs.show_help { 
         panic!()
     };
 
-    // remove from argument list as to not interfere with fallback parsing
-    if clapargs.json {
-        remove_arg(&mut osargs, "-j");
-        //set_error_panic!("Error: sorry, but json is currently unsupported.");
-        //panic!();
-    }
-    if clapargs.full {
-        remove_arg(&mut osargs, "-f");
-    }
+    let sleep_amount = (1_000_000.0 / clapargs.rate) as u64;
 
     let possible_switches = [clapargs.minutes, clapargs.hours, clapargs.days];
 
@@ -315,39 +448,37 @@ fn main() {
 
     let mut target = 0;
 
-    // Clap argument parsing
-    if !clapargs.timestamp {
-        for possible_input_idx in 0..=possible_switches.len() {
-
-            if possible_input_idx == 0 {
-                target += match clapargs.time[0].clone().parse::<f64>() {
-                    Ok(num) => (num * 1000.0) as i128,
-                    Err(_) => { 0 },
-                };
-            } else {
-                target += match possible_switches[possible_input_idx-1].parse::<f64>() {
-                    Ok(num) => { { log::debug!("possible_input_idx = {:?}", &possible_input_idx); }
-                                 { log::debug!("provided value = {num}"); }
-                                 (num * 1000.0) as i128 * factors[possible_input_idx] },
-                    Err(_) => { 0 },
-                };
-
-            } 
-        }
-
+    if clapargs.timestamp.chars().count() > 0 {
+        { log::debug!("Parsing timestamp. {:?}", clapargs.time[0]); }
+        target = parse_timestamp(clapargs.timestamp.clone());
     } else {
-        // should be last item in possible_switches
-        { log::debug!("{:?} {:?}", "Parsing timestamp.", clapargs.time[0]); }
-        target = parse_timestamp(clapargs.time[0].clone());
+
+        { log::debug!("Checking for duration switches..."); }
+        // Clap argument parsing
+        for possible_input_idx in 0..possible_switches.len() {
+
+
+            target += match possible_switches[possible_input_idx].parse::<f64>() {
+                Ok(num) => { { log::debug!("possible_input_idx = {:?}", possible_input_idx); }
+                             { log::debug!("provided value = {num}"); }
+                             (num * 1000.0) as i128 * factors[possible_input_idx+1] },
+                Err(_) => { 0 },
+            };
+
+        }
     }
 
     // Fallback parsing -- GNU sleep imitation
-    if target == 0i128 {
+    //if target == 0i128 {
         let mut factor_idx;
 
-        { log::debug!("Using fallback arguments. {:?}", &osargs[1..]); }
+        {
+            log::debug!("Using trailing arguments as fallback arguments... {:?}", clapargs.time);
+            log::debug!("... Adding to existing target time.");
+        }
 
-        for arg in (&osargs[1..]).iter() {
+//        for arg in (&osargs[1..]).iter() {
+        for arg in clapargs.time.iter() {       
             let len = arg.chars().count();
             target += ( match arg.parse::<f64>() {
                 Ok(num) => { factor_idx = 0; num },
@@ -355,7 +486,7 @@ fn main() {
 
                     { log::debug!("truncated argument {:?}", &arg[..len-1]); }
 
-                    match (&arg[..len-1]).to_string().parse::<f64>() {
+                    match (arg[..len-1]).to_string().parse::<f64>() {
                         Ok(num) => {
 
                             { log::debug!("num ok: {:?}",num); }
@@ -386,17 +517,31 @@ fn main() {
                 },
             } * 1000.0 ) as i128 * factors[factor_idx];
         }
-    }
+    //}
 
     { log::debug!("total target time is {:?} milliseconds", target); }
+
+    if target == 0 {
+        { log::debug!("Exiting due to target time of zero."); }
+        set_panic!("");
+        panic!();
+    }
+
+    let mut time_spent = start.elapsed().as_millis();
+
+    let mut last = match clapargs.up {
+        false => time_spent as i128,
+        true => target,
+    };
+
 
     let format_width =
         if clapargs.full {
             5
         } else {
             let mut width = 2;
-            for i in 0..factors.len() {
-                if target > factors[i] * 1000 {
+            for (i,factor) in factors.iter().enumerate() {
+                if target > factor * 1000 {
                     width = i+2;
                 }
             }
@@ -406,47 +551,174 @@ fn main() {
     { log::debug!("format_width = {}", format_width); }
     set_error_panic!("Unknown error.");
     
+    let resolution = match clapargs.resolution {
+        'm' | '0' => 0,
+        's' | 'S' | '1' => 1,
+        'M' | '2' => 2,
+        'h' | 'H' | '3' => 3,
+        'd' | 'D' | '4' => 4,
+        _ => {
+            set_error_panic!("Error: invalid resolution setting.");
+            panic!();
+        }
+    };
+
+    #[allow(clippy::comparison_chain)]
+    if resolution == format_width {
+        let _ = stdout().queue(Print("Warning: resolution setting prevents useful output"));
+        new_line();
+    } else if resolution > format_width {
+        set_error_panic!("Error: resolution too coarse for the amount of time provided. (Try using a different resolution or using the '-f' switch.)");
+        panic!();
+    }
+
+    { log::debug!("Resolution set to {} ({})", resolution,
+        match resolution {
+            0 => "milliseconds",
+            1 => "seconds",
+            2 => "minutes",
+            3 => "hours",
+            4 => "days",
+            _ => "unknown",
+        }); }
+
+    let is_file = !matches!(clapargs.output_file.as_str(), "" | "-");
+    { log::debug!("Output determined. is_file = {:?}", is_file); }
+
+    let output_buf = &mut std::io::stdout();
+    let output_tmp = clapargs.output_file.clone() + ".tmp";
+   
+    #[cfg(debug_assertions)]
+    let mut creation_times = Vec::new(); 
+    #[cfg(debug_assertions)]
+    let mut rename_times = Vec::new();
+    #[cfg(debug_assertions)]
+    let mut total_write_times = Vec::new();
+
+    if is_file {
+        println!("Running.");
+    }
+
     // MAIN LOOP
     let mut time_over = false;
+    let mut first_draw = true;
     loop {
+        if !is_file {
+            let _ = stdout().queue(MoveToColumn(0));
+        }
+
+
+        let mut difference = match clapargs.up {
+            false => target-time_spent as i128,
+            true => time_spent as i128,
+        };
         
-        let _ = stdout().queue(MoveToColumn(0));
+        if !clapargs.up {
+            if difference <= 0i128 {
+                difference = 0;
+                time_over = true;
+            }
+        } else if difference >= target {
+            difference = target;
+            time_over = true;
+        }
 
-        let difference = target as i128-time_spent as i128;
 
-        if difference < 0i128 {
-            format_time(0i128, format_width, clapargs.json);
-            let _ = stdout().queue(Clear(UntilNewLine));
-            new_line();            time_over = true;
+        if is_file {
+
+            #[cfg(debug_assertions)]
+            let pre_write = Instant::now();
+
+            let _ = format_time(difference, last, format_width, resolution, clapargs.json, {
+                        let path = std::path::Path::new(&output_tmp);
+
+                        #[cfg(debug_assertions)]
+                        let pre_file = Instant::now();
+
+                        let file = std::fs::File::create(path).unwrap_or_else(|_| {
+                            set_error_panic!("Error: Could not create tmp file");
+                            panic!();
+                        });
+                        #[cfg(debug_assertions)]
+                        creation_times.push(pre_file.elapsed().as_micros());
+
+                        file
+            }, is_file, false);
+
+            #[cfg(debug_assertions)]
+            let pre_rename = Instant::now();
+
+            std::fs::rename(
+                std::path::Path::new(&output_tmp),
+                std::path::Path::new(&clapargs.output_file)
+            ).unwrap_or_else(|_| {
+                set_error_panic!("Error: Could not rename tmp file");
+                panic!();
+            });
+
+            #[cfg(debug_assertions)]
+            {
+                rename_times.push(pre_rename.elapsed().as_micros());
+                total_write_times.push(pre_write.elapsed().as_micros());
+            }
 
         } else {
-            format_time(difference, format_width, clapargs.json);
-            let _ = stdout().queue(Clear(UntilNewLine));
+            last = format_time(difference, last, format_width, resolution, clapargs.json, &mut *output_buf, is_file, first_draw);
+            first_draw = false;
+        }
+
+        if !is_file {
+        //    let _ = stdout().queue(Clear(UntilNewLine));
             new_line();
-        }
-
-
-        if !clapargs.json {
-            let _ =
-                stdout().queue(Clear(UntilNewLine));
-        }
-        let _ = stdout().flush();
-        if !clapargs.json {
-            let _ = stdout().queue(MoveUp(1));
+            let _ = stdout().flush();
         }
 
        
-        if time_over { break; }
+        if time_over {
+            if !is_file {
+                let _ = stdout().queue(MoveUp(1));
+            }
+            break;
+        }
 
-        std::thread::sleep(std::time::Duration::from_micros(800));
+        sleep_minimal(sleep_amount, target, start);
+
+        if !clapargs.json && !is_file {
+            let _ = stdout().queue(MoveUp(1));
+        }
         time_spent = start.elapsed().as_millis();
 
     }
 
-    let _ = stdout().queue(SetForegroundColor(Reset));
-    if clapargs.no_newline {
+    if !is_file {
+        let _ = stdout().queue(SetForegroundColor(Reset));
+        if !clapargs.no_newline {
+            new_line();
+        }
         let _ = stdout().flush();
     } else {
-        new_line();
+        println!("Done.");
+    }
+
+    #[cfg(debug_assertions)]
+    if is_file {
+        let creation_count = creation_times.len();
+        log::debug!("Average file creation time: {}ms",
+            creation_times
+            .iter()
+            .sum::<u128>() as f64 / 1000.0 / creation_count as f64);
+
+        let rename_count = rename_times.len();
+        log::debug!("Average file rename time: {}ms",
+            rename_times
+            .iter()
+            .sum::<u128>() as f64 / 1000.0 / rename_count as f64);
+
+        let write_count = total_write_times.len();
+        log::debug!("Average total file write time: {}ms",
+            total_write_times
+            .iter()
+            .sum::<u128>() as f64 / 1000.0 / write_count as f64);
+
     }
 }

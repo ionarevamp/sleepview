@@ -1,10 +1,10 @@
 [package]
 name = "sleepview"
-version = "1.2.6001"
-edition = "2021"
+version = "2.0.0"
+edition = "2018"
 authors = ["Iona Erofeeff <iedevfeedback@gmail.com>"]
-rust-version = "1.78.0"
-description = "Visible timer countdown in the terminal."
+rust-version = "1.74.1"
+description = "Visible timer display in the terminal."
 repository = "https://github.com/ionarevamp/sleepview.git"
 readme = "README.md"
 license = "MIT"
@@ -15,15 +15,15 @@ categories = ["command-line-utilities"]
 strip = "symbols"
 opt-level = "z"
 lto = true
+codegen-units = 1
 
 [profile.dev]
-# strip = true
+# strip = "true"
+opt-level = 2
 
 [dependencies]
 clap = { version = "4.5.8", features = ["derive"] }
 crossterm = "0.27.0"
 env_logger = "0.11.3"
-itertools = "0.13.0"
 log = { version = "0.4.22", features = ["max_level_debug"] }
-pprof = { version = "0.13.0", features = ["flamegraph"] }
 

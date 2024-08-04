@@ -1,38 +1,40 @@
 // format_width should be passed in as num_fields
+use std::io::Write;
 
-pub fn produce_json(values: [i128; 5], num_fields: usize) {
-    print!("{{");
+
+pub fn produce_json(values: [i128; 5], num_fields: usize, resolution: usize, mut output: impl Write) {
+    let _ = write!(output, "{{");
     let mut field_count = num_fields;
     for val in 
-        values[..num_fields].iter().rev()
+        values[resolution..num_fields].iter().rev()
         {
             match field_count-1 {
                 0 => {
-                    print!(" \"milliseconds\": \"{}\"", val);
+                    let _ = write!(output, " \"milliseconds\": \"{}\"", val);
                 },
                 1 => {
-                    print!(" \"seconds\": \"{}\"", val);
+                    let _ = write!(output, " \"seconds\": \"{}\"", val);
                 },
                 2 => {
-                    print!(" \"minutes\": \"{}\"", val);
+                    let _ = write!(output, " \"minutes\": \"{}\"", val);
                 },
                 3 => {
-                    print!(" \"hours\": \"{}\"", val);
+                    let _ = write!(output, " \"hours\": \"{}\"", val);
                 },
                 4 => {
-                    print!(" \"days\": \"{}\"", val);
+                    let _ = write!(output, " \"days\": \"{}\"", val);
                 },
                 _ => {
-                    print!(" \"unknown_field\": \"{}\"", val);
+                    let _ = write!(output, " \"unknown_field\": \"{}\"", val);
                 }
             }
 
-            if field_count > 1 {
-                print!(",");
+            if field_count-resolution > 1 {
+                let _ = write!(output, ",");
             } else {
-                print!(" ");
+                let _ = write!(output, " ");
             }
             field_count -= 1;
         }
-    print!("}}");
+    let _ = write!(output, "}}");
 }
