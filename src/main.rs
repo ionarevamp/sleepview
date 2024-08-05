@@ -88,6 +88,7 @@ macro_rules! set_error_panic {
     }
 }
 
+#[inline(always)]
 fn new_line() {
     #[cfg(target_os = "windows")]
     print!("\r");
@@ -95,6 +96,7 @@ fn new_line() {
 
 }
 
+#[inline(never)]
 fn sleep_minimal(sleep_amount: u64, target: i128, start: Instant) {
 
     let mut sleep_amount = sleep_amount;
@@ -115,6 +117,7 @@ fn sleep_minimal(sleep_amount: u64, target: i128, start: Instant) {
     }
 }
 
+#[inline(always)]
 fn parse_timestamp(timestamp: String) -> i128 {
 
     let mut ms = 0;
@@ -192,7 +195,7 @@ fn parse_timestamp(timestamp: String) -> i128 {
 
 #[allow(clippy::too_many_arguments)]
 #[inline(always)]
-fn format_time(millis: i128, previous_millis: i128, format_width: usize, resolution: usize, as_json: bool, mut output: impl Write, is_file: bool, first_draw: bool) -> i128 {
+fn format_time(millis: i128, previous_millis: i128, format_width: usize, resolution: usize, as_json: bool, mut output: impl Write, is_file: bool, first_draw: bool) {
 
     let mut remaining = millis;
     let mut days = 0;
@@ -275,7 +278,7 @@ fn format_time(millis: i128, previous_millis: i128, format_width: usize, resolut
     // Output json OR continue with normal formatting
     if as_json {
         produce_json(values, format_width, resolution, output);
-        return millis;
+        return;
     }
     if !is_file {
 
@@ -393,7 +396,6 @@ fn format_time(millis: i128, previous_millis: i128, format_width: usize, resolut
 
 
 //    format!("[{:0>2}:]{:0>2}:{:0>2}:{:0>2}.{:0>3}", days, hours, minutes, seconds, remaining)
-    millis
 }
 
 
@@ -586,6 +588,7 @@ fn main() {
     { log::debug!("Output determined. is_file = {:?}", is_file); }
 
     let output_buf = &mut std::io::stdout();
+
     let output_tmp = clapargs.output_file.clone() + ".tmp";
    
     #[cfg(debug_assertions)]
@@ -598,6 +601,7 @@ fn main() {
     if is_file {
         println!("Running.");
     }
+
 
     // MAIN LOOP
     let mut time_over = false;
@@ -629,20 +633,20 @@ fn main() {
             #[cfg(debug_assertions)]
             let pre_write = Instant::now();
 
-            let _ = format_time(difference, last, format_width, resolution, clapargs.json, {
-                        let path = std::path::Path::new(&output_tmp);
+            format_time(difference, last, format_width, resolution, clapargs.json, { 
+                let path = std::path::Path::new(&output_tmp);
 
-                        #[cfg(debug_assertions)]
-                        let pre_file = Instant::now();
+                #[cfg(debug_assertions)]
+                let pre_file = Instant::now();
 
-                        let file = std::fs::File::create(path).unwrap_or_else(|_| {
-                            set_error_panic!("Error: Could not create tmp file");
-                            panic!();
-                        });
-                        #[cfg(debug_assertions)]
-                        creation_times.push(pre_file.elapsed().as_micros());
+                let file = std::fs::File::create(path).unwrap_or_else(|_| {
+                    set_error_panic!("Error: Could not create tmp file");
+                    panic!();
+                });
+                #[cfg(debug_assertions)]
+                creation_times.push(pre_file.elapsed().as_micros());
 
-                        file
+                file
             }, is_file, false);
 
             #[cfg(debug_assertions)]
@@ -663,7 +667,7 @@ fn main() {
             }
 
         } else {
-            last = format_time(difference, last, format_width, resolution, clapargs.json, &mut *output_buf, is_file, first_draw);
+            format_time(difference, last, format_width, resolution, clapargs.json, &mut *output_buf, is_file, first_draw);
             first_draw = false;
         }
 
@@ -686,8 +690,9 @@ fn main() {
         if !clapargs.json && !is_file {
             let _ = stdout().queue(MoveUp(1));
         }
-        time_spent = start.elapsed().as_millis();
 
+        time_spent = start.elapsed().as_millis();
+        last = difference;
     }
 
     if !is_file {

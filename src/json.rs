@@ -1,7 +1,7 @@
 // format_width should be passed in as num_fields
 use std::io::Write;
 
-
+#[inline(always)]
 pub fn produce_json(values: [i128; 5], num_fields: usize, resolution: usize, mut output: impl Write) {
     let _ = write!(output, "{{");
     let mut field_count = num_fields;
