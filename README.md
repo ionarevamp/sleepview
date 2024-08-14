@@ -4,9 +4,9 @@ Have you ever used the sleep command, only to be left wishing you could actually
 
 >`sleepview [OPTIONS] [SWITCH] DURATION ...` or `sleepview [OPTIONS] DURATION[SUFFIX]...`
 
->DURATION: the amount of time to count down in seconds. Can be specified in combination with switches, or omitted entirely with switches present. Using a timestamp disables other switches, and only one of each other switch is allowed. Multiple non-timestamp durations will be added together.
+>DURATION: the amount of time to count down in seconds. Can be specified in combination with switches, or omitted entirely with switches present. Using a timestamp disables other duration switches, and only one of each other switch is allowed. Multiple non-timestamp durations will be added together.
 
->SUFFIX: can be 's', 'm', 'h', or 'd' for seconds, minutes, hours or days. Multiple durations of any kind will be added together. This is considered a fallback method, and only works properly without switches present.
+>SUFFIX: can be 's', 'm', 'h', or 'd' for seconds, minutes, hours or days. Multiple durations of any kind will be added together. This is considered a fallback method, but still works with duration switches present.
 
 >SWITCHES:
 
@@ -69,9 +69,11 @@ Have you ever used the sleep command, only to be left wishing you could actually
 >>}
 >>```
 
-## Planned Features
+## Planned Features/Updates
  - [x] Add ability to parse arguments in the same way as GNU sleep, that is, `sleepview NUMBER[SUFFIX]` where the suffix can be nothing/'s' for seconds, 'm' for minutes, 'h' for hours, and 'd' for days.
  - [x] Add json output support, for better program interoperability.
+ - [x] Add more options to adjust output. (Added -o, -r, -u, -R)
+ - [ ] Improve error-handling for cases where either writing to stdout or writing to a file is restricted/disabled.
 
 ## Development
 If you have cloned the repo, debug information can be enabled by setting the environment variable `RUST_LOG` to `debug`. e.g. `RUST_LOG=debug cargo run -- 1.1`

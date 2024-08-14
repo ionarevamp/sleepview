@@ -14,16 +14,17 @@ categories = ["command-line-utilities"]
 [profile.release]
 strip = "symbols"
 opt-level = "z"
-lto = true
 codegen-units = 1
+lto = true
 
 [profile.dev]
-# strip = "true"
 opt-level = 2
 
 [features]
 gold = []
 mold = []
+cortex-a8 = ["gold"]
+arm1176 = ["gold"]
 
 [dependencies]
 clap = { version = "4.5.8", features = ["derive"] }

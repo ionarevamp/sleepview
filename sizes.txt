@@ -1,0 +1,4 @@
+-rwx------ 1 u0_a277 u0_a277  39M Aug  5 17:04 /data/data/com.termux/files/home/.cargo/build/debug/sleepview
+-rwx------ 1 u0_a277 u0_a277 587K Aug  5 17:05 /data/data/com.termux/files/home/.cargo/build/release/sleepview
+-rwx------ 1 u0_a277 u0_a277  39M Aug  5 17:05 /data/data/com.termux/files/home/.cargo/build/debug/sleepview
+-rwx------ 1 u0_a277 u0_a277 583K Aug  5 17:05 /data/data/com.termux/files/home/.cargo/build/release/sleepview

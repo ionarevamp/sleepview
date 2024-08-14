@@ -195,7 +195,7 @@ fn parse_timestamp(timestamp: String) -> i128 {
 
 #[allow(clippy::too_many_arguments)]
 #[inline(always)]
-fn format_time(millis: i128, previous_millis: i128, format_width: usize, resolution: usize, as_json: bool, mut output: impl Write, is_file: bool, first_draw: bool) {
+fn format_time(millis: i128, previous_millis: i128, format_width: usize, resolution: usize, as_json: bool, output: &mut impl Write, is_file: bool, first_draw: bool) {
 
     let mut remaining = millis;
     let mut days = 0;
@@ -285,29 +285,29 @@ fn format_time(millis: i128, previous_millis: i128, format_width: usize, resolut
         // Essentially, if a field is different or it's the first time printing, print the data,
         // but otherwise just move the cursor forward
 
-        let _ = output.queue(SetForegroundColor(Reset));
+        let _ = (*output).queue(SetForegroundColor(Reset));
         for i in (resolution..format_width).rev() {
             if values[i] != prev_values[i] || first_draw {
                 match i {
                     0 => { // millis
-                        let _ = output.queue(SetForegroundColor(Grey));
-                        let _ = output.queue(Print(format!(".{:0>3}", values[i])));
+                        let _ = (*output).queue(SetForegroundColor(Grey));
+                        let _ = (*output).queue(Print(format!(".{:0>3}", values[i])));
                     },
                     1 => { // seconds
-                        let _ = output.queue(Print(format!("{:0>2}", values[i])));
+                        let _ = (*output).queue(Print(format!("{:0>2}", values[i])));
                     },
                     4 => { // days
-                        let _ = output.queue(Print(format!("[{:0>2}", values[i])));
+                        let _ = (*output).queue(Print(format!("[{:0>2}", values[i])));
                     },
                     _ => { // minutes, hours
-                        let _ = output.queue(Print(format!("{:0>2}", values[i])));
+                        let _ = (*output).queue(Print(format!("{:0>2}", values[i])));
                     },
                 }
                 if i != resolution && i > 1 {
-                    let _ = output.queue(Print(":"));
+                    let _ = (*output).queue(Print(":"));
                 }
                 if i == 4 {
-                    let _ = output.queue(Print("]"));
+                    let _ = (*output).queue(Print("]"));
                 }
             } else {
                 let mut offset = 0;
@@ -322,7 +322,7 @@ fn format_time(millis: i128, previous_millis: i128, format_width: usize, resolut
                     offset+= 2;
                 }
                 if offset > 0 {
-                    let _ = output.queue(MoveRight(offset));
+                    let _ = (*output).queue(MoveRight(offset));
                 }
             }
         }
@@ -408,13 +408,6 @@ fn main() {
     env_logger::init();
     set_panic!(HELP_MSG);
  
-    /*
-    else if args().count() > 3 {
-        set_error_panic!("Error: too many arguments.");
-        panic!()
-    }
-    */
-
     { log::debug!("{:#?}", Args::parse()); }
 
     let clapargs = match Args::try_parse() {
@@ -587,7 +580,7 @@ fn main() {
     let is_file = !matches!(clapargs.output_file.as_str(), "" | "-");
     { log::debug!("Output determined. is_file = {:?}", is_file); }
 
-    let output_buf = &mut std::io::stdout();
+    let output_buf = &mut std::io::stdout().lock();
 
     let output_tmp = clapargs.output_file.clone() + ".tmp";
    
@@ -633,20 +626,23 @@ fn main() {
             #[cfg(debug_assertions)]
             let pre_write = Instant::now();
 
+            #[cfg(debug_assertions)]
+            let pre_file = Instant::now();
+
+
+            let path = std::path::Path::new(&output_tmp);
+            let mut file = std::fs::File::create(path).unwrap_or_else(|_| {
+                set_error_panic!("Error: Could not create tmp file");
+                panic!();
+            });
+        
+            #[cfg(debug_assertions)]
+            creation_times.push(pre_file.elapsed().as_micros());
+
+
             format_time(difference, last, format_width, resolution, clapargs.json, { 
-                let path = std::path::Path::new(&output_tmp);
 
-                #[cfg(debug_assertions)]
-                let pre_file = Instant::now();
-
-                let file = std::fs::File::create(path).unwrap_or_else(|_| {
-                    set_error_panic!("Error: Could not create tmp file");
-                    panic!();
-                });
-                #[cfg(debug_assertions)]
-                creation_times.push(pre_file.elapsed().as_micros());
-
-                file
+                &mut file
             }, is_file, false);
 
             #[cfg(debug_assertions)]
@@ -667,14 +663,14 @@ fn main() {
             }
 
         } else {
-            format_time(difference, last, format_width, resolution, clapargs.json, &mut *output_buf, is_file, first_draw);
+            format_time(difference, last, format_width, resolution, clapargs.json, output_buf, is_file, first_draw);
             first_draw = false;
         }
 
         if !is_file {
         //    let _ = stdout().queue(Clear(UntilNewLine));
             new_line();
-            let _ = stdout().flush();
+            let _ = output_buf.flush();
         }
 
        
@@ -700,7 +696,7 @@ fn main() {
         if !clapargs.no_newline {
             new_line();
         }
-        let _ = stdout().flush();
+        let _ = output_buf.flush();
     } else {
         println!("Done.");
     }
