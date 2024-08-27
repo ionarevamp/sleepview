@@ -50,7 +50,7 @@ struct Args {
     resolution: char,
     #[arg(short, required(false), default_value_t=false)]
     up: bool,
-    #[arg(short, long, required(false), default_value_t=String::new())]
+    #[arg(short, long="output", required(false), default_value_t=String::new())]
     output_file: String,
 }
 

@@ -21,17 +21,29 @@ Have you ever used the sleep command, only to be left wishing you could actually
 >-t :   Specify a timestamp, in the form (D)D:(H)H:(M)M:(S)S(.DEC) -- days, hours, minutes, seconds, decimal portion.
 
 >OPTIONS:
+>Note: use short options only
 
->-f :\t(full) Show full width of timestamp, regardless of target time. Without this option, fields in the display format that will always show zero will be omitted.
+>-f : (full) Show full width of timestamp, regardless of target time. Without this option, fields in the display format that will always show zero will be omitted.
 
->-n :\t(no_newline) Do not append a new line when the program finishes naturally -- this generally causes the output to be overwritten by either the prompt or any other output on the same line as the countdown output.
+>-n : (no_newline) Do not append a new line when the program finishes naturally -- this generally causes the output to be overwritten by either the prompt or any other output on the same line as the countdown output.
 
->-j :\t(json) Output data as json. Not recommended for normal use. Compatible with -f option.
+>-j : (json) Output data as json. Not recommended for normal use. Compatible with -f option.
+
+>-o : (output, string) Specify an output file path, either absolute or relative to the current working directory. Can also be `-` for standard output, which is the default when no output path is specified.
+
+>-u : (up) Count up from 0 to the target time, instead down from the target time to 0.
+
+>-r : (rate, boolean) The minimum amount of time to wait as calculated by ( 1 / RATE ) seconds, if the amount of time left to count is greater than the calculated value. Otherwise, the amount of time between loops is cut to maintain accuracy to the specified target time.
+
+>-R : (resolution, character/integer) Specify the resolution of the output format. Applies to both json and default formats. Can be one of "m" or 0 (milliseconds), "s"/"S" or 1 (seconds), "M" or 2 (minutes), "h"/"H" or 3 (hours), OR "d"/"D" or 4 (days). This omits the number of fields specified, and so should not attempt to omit more fields than would be displayed without the -f flag.
+
 
 # Installation
 
 `cargo install sleepview`
 (Requires rust, of course.)
+There are also two mutually-exclusive features that can be provided: `mold` and `gold`. Just add the `--features=...` option set to one of them to use the respective linker plugin.
+Note that mold requires both `clang` and `mold` to be installed and in the PATH, while `gold` requires `gold` to be in the PATH.
 
 ## Important usage details
  - `crossterm` dependency SHOULD ensure cross-platform reliability, but there might be exceptions. If a case is encountered where it does not work as expected (probably due to unexpected escape code handling), feel free to send feedback including:
@@ -65,7 +77,7 @@ Have you ever used the sleep command, only to be left wishing you could actually
 >To use it regularly, a shell function along the lines of this might be in order:
 >>```
 >>function timer() {
->>    sleepview "$@" && your_alarm_command
+>>    sleepview $@ && your_alarm_command
 >>}
 >>```
 
