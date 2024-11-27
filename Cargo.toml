@@ -1,10 +1,10 @@
 [package]
 name = "sleepview"
-version = "2.0.2"
+version = "2.0.3"
 edition = "2018"
 authors = ["Iona Erofeeff <iedevfeedback@gmail.com>"]
 rust-version = "1.74.1"
-description = "Visible timer display in the terminal."
+description = "Sleep progress output in the terminal."
 repository = "https://github.com/ionarevamp/sleepview.git"
 readme = "README.md"
 license = "MIT"
@@ -31,4 +31,4 @@ clap = { version = "4.5.8", features = ["derive"] }
 crossterm = "0.27.0"
 env_logger = "0.11.3"
 log = { version = "0.4.22", features = ["max_level_debug"] }
-
+ 

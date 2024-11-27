@@ -7,6 +7,7 @@ mod help;
 use help::*;
 
 use std::time::Instant;
+use std::time::SystemTime;
 use std::io::{stdout, Write};
 #[cfg(debug_assertions)]
 use std::fmt;
@@ -38,7 +39,7 @@ struct Args {
     hours: String,
     #[arg(short, required(false), default_value_t=("0".to_string()))]
     days: String,
-    #[arg(short = 'h', required(false), default_value_t=false)]
+    #[arg(short = 'h', long="help", required(false), default_value_t=false)]
     show_help: bool,
     #[arg(short = 't', required(false), default_value_t=(String::new()))]
     timestamp: String,
@@ -52,6 +53,8 @@ struct Args {
     up: bool,
     #[arg(short, long="output", required(false), default_value_t=String::new())]
     output_file: String,
+    #[arg(short = 'I', long="instant", required(false), default_value_t=false)]
+    instant: bool,
 }
 
 #[cfg(debug_assertions)]
@@ -84,7 +87,7 @@ macro_rules! set_panic {
 
 macro_rules! set_error_panic {
     ($msg:expr) => {
-        set_panic!(String::from(HELP_MSG) + "\n" + $msg);
+        set_panic!(String::from("sleepview v") + env!("CARGO_PKG_VERSION") + "\n" + HELP_MSG + "\n" + $msg);
     }
 }
 
@@ -112,9 +115,27 @@ fn sleep_minimal(sleep_amount: u64, target: i128, start: Instant) {
         } else {
             sleep_amount = (sleep_amount * 12u64) / 13u64;
         }
-
-        
     }
+}
+
+#[inline(always)]
+fn check_system_time(sleep_amount: u64, target: i128, start: SystemTime) {
+
+    let mut sleep_amount = sleep_amount;
+    loop {
+        if (target * 1000i128 - start.elapsed().unwrap().as_micros() as i128) < 500i128 {
+            std::thread::sleep(std::time::Duration::from_micros(8000));
+            //std::hint::spin_loop();
+            break;
+        }
+        if (sleep_amount as i128) < target * 1000i128 - start.elapsed().unwrap().as_micros() as i128 {
+            std::thread::sleep(std::time::Duration::from_nanos(sleep_amount * 1000u64));
+            break;
+        } else {
+            sleep_amount = (sleep_amount * 12u64) / 13u64;
+        }    
+    }
+   
 }
 
 #[inline(always)]
@@ -402,11 +423,13 @@ fn format_time(millis: i128, previous_millis: i128, format_width: usize, resolut
 fn main() {
    
     // Should be the first thing done for maximum accuracy
-    let start = Instant::now();
+    let instant_start = Instant::now();
+    let system_time_start = SystemTime::now();
    
     #[cfg(debug_assertions)]
     env_logger::init();
-    set_panic!(HELP_MSG);
+    // Default help message
+    set_error_panic!("");
  
     { log::debug!("{:#?}", Args::parse()); }
 
@@ -522,10 +545,17 @@ fn main() {
         panic!();
     }
 
-    let mut time_spent = start.elapsed().as_millis();
+    let mut instant_time_spent = instant_start.elapsed().as_millis();
+    let mut system_time_spent = system_time_start.elapsed().unwrap().as_millis();
 
     let mut last = match clapargs.up {
-        false => time_spent as i128,
+        false => {
+            if clapargs.instant {
+                instant_time_spent as i128
+            } else {
+                system_time_spent as i128
+            }
+        },
         true => target,
     };
 
@@ -599,6 +629,11 @@ fn main() {
     // MAIN LOOP
     let mut time_over = false;
     let mut first_draw = true;
+    let mut time_spent = if clapargs.instant {
+        &mut instant_time_spent
+    } else {
+        &mut system_time_spent
+    };
     loop {
         if !is_file {
             let _ = stdout().queue(MoveToColumn(0));
@@ -606,8 +641,8 @@ fn main() {
 
 
         let mut difference = match clapargs.up {
-            false => target-time_spent as i128,
-            true => time_spent as i128,
+            false => target-*time_spent as i128,
+            true => *time_spent as i128,
         };
         
         if !clapargs.up {
@@ -637,7 +672,7 @@ fn main() {
             });
         
             #[cfg(debug_assertions)]
-            creation_times.push(pre_file.elapsed().as_micros());
+//            creation_times.push(pre_file.elapsed().as_micros());
 
 
             format_time(difference, last, format_width, resolution, clapargs.json, { 
@@ -658,8 +693,8 @@ fn main() {
 
             #[cfg(debug_assertions)]
             {
-                rename_times.push(pre_rename.elapsed().as_micros());
-                total_write_times.push(pre_write.elapsed().as_micros());
+  //              rename_times.push(pre_rename.elapsed().as_micros());
+    //            total_write_times.push(pre_write.elapsed().as_micros());
             }
 
         } else {
@@ -681,13 +716,27 @@ fn main() {
             break;
         }
 
-        sleep_minimal(sleep_amount, target, start);
+        if clapargs.instant {
+            sleep_minimal(sleep_amount, target, instant_start);
+        } else {
+            check_system_time(sleep_amount, target, system_time_start);
+        }
+
 
         if !clapargs.json && !is_file {
             let _ = stdout().queue(MoveUp(1));
         }
 
-        time_spent = start.elapsed().as_millis();
+        *time_spent = if clapargs.instant {
+            instant_start.elapsed().as_millis()
+        } else {
+            system_time_start.elapsed().unwrap().as_millis()
+        };
+
+        // check for consistency...
+        if last < difference {
+            let _ = stdout().write_all(b"\x07");
+        }
         last = difference;
     }
 

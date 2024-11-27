@@ -37,12 +37,15 @@ Have you ever used the sleep command, only to be left wishing you could actually
 
 >-R :   (resolution, character/integer) Specify the resolution of the output format. Applies to both json and default formats. Can be one of \"m\" or 0 (milliseconds), \"s\"/\"S\" or 1 (seconds), \"M\" or 2 (minutes), \"h\"/\"H\" or 3 (hours), OR \"d\"/\"D\" or 4 (days). This omits the number of fields specified, and so should not attempt to omit more fields than would be displayed without the -f flag.
 
+>-I :   (instant, boolean) By default, as of version 2.0.3, sleepview uses the SystemTime API to record when the program started. If you choose to use the Instant API instead, then be warned that system idle periods may skew results.
+
+
 # Installation
 
 `cargo install sleepview`
 (Requires rust, of course.)
 There are also two mutually-exclusive features that can be provided: `mold` and `gold`. Just add the `--features=...` option set to one of them to use the respective linker plugin.
-Note that mold requires both `clang` and `mold` to be installed and in the PATH, while `gold` requires `gold` to be in the PATH.
+Note that mold requires both `clang` and `mold` to be installed and in the PATH, while `gold` requires `gold` to be installed and in the PATH.
 
 ## Important usage details
  - `crossterm` dependency SHOULD ensure cross-platform reliability, but there might be exceptions. If a case is encountered where it does not work as expected (probably due to unexpected escape code handling), feel free to send feedback including:
