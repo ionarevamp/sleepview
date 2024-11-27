@@ -230,6 +230,9 @@ fn format_time(millis: i128, previous_millis: i128, format_width: usize, resolut
     let mut prev_minutes = 0;
     let mut prev_seconds = 0;
 
+    
+    #[cfg(debug_assertions)]
+    log::debug!("format_time: millis = {millis}, previous_millis = {previous_millis}");
 
     while remaining >= 1000 {
         let mut divisor = 1000;
@@ -259,15 +262,15 @@ fn format_time(millis: i128, previous_millis: i128, format_width: usize, resolut
         let mut divisor = 1000;
         let mut val_ptr = &mut prev_seconds;
 
-        if remaining >= 1000 * 60 * 60 * 24 {
+        if prev_remaining >= 1000 * 60 * 60 * 24 {
             divisor = 1000 * 60 * 60 * 24;
             val_ptr = &mut prev_days;
         }
-        else if remaining >= 1000 * 60 * 60 {
+        else if prev_remaining >= 1000 * 60 * 60 {
             divisor = 1000 * 60 * 60;
             val_ptr = &mut prev_hours;
         }
-        else if remaining >= 1000 * 60 {
+        else if prev_remaining >= 1000 * 60 {
             divisor = 1000 * 60;
             val_ptr = &mut prev_minutes;
         }
@@ -277,6 +280,10 @@ fn format_time(millis: i128, previous_millis: i128, format_width: usize, resolut
         prev_remaining -= multiple;
 
         *val_ptr += multiple / divisor;
+
+        #[cfg(debug_assertions)]
+        let _ = (*output).queue(Print(format!("adding amount {} at divisor {}\n", multiple / divisor, divisor)));
+
     }
     set_error_panic!("Failed inside `format_time()`");
  
@@ -308,6 +315,22 @@ fn format_time(millis: i128, previous_millis: i128, format_width: usize, resolut
 
         let _ = (*output).queue(SetForegroundColor(Reset));
         for i in (resolution..format_width).rev() {
+           
+            #[cfg(debug_assertions)]
+            {
+                let _ = (*output).queue(Print(format!("{}: prev: {} now: {} \n", 
+                    match i {
+                        0 => "millis",
+                        1 => "seconds",
+                        2 => "minutes",
+                        3 => "hours",
+                        4 => "days",
+                        _ => "unknown",
+                    },
+                prev_values[i], values[i])));
+            }
+
+            #[cfg(not(debug_assertions))]
             if values[i] != prev_values[i] || first_draw {
                 match i {
                     0 => { // millis
@@ -324,25 +347,32 @@ fn format_time(millis: i128, previous_millis: i128, format_width: usize, resolut
                         let _ = (*output).queue(Print(format!("{:0>2}", values[i])));
                     },
                 }
-                if i != resolution && i > 1 {
+                if i > resolution && i > 1 {
                     let _ = (*output).queue(Print(":"));
                 }
                 if i == 4 {
                     let _ = (*output).queue(Print("]"));
                 }
-            } else {
+            }
+
+            if values[i] == prev_values[i] && !first_draw {
+                #[cfg(debug_assertions)]
+                {
+                    let _ = (*output).queue(Print("(caught same value, would skip printing)\n"));
+                }
+
                 let mut offset = 0;
                 if i > 0 {
                     offset += 2;
                 }
                 if i > resolution && i > 1 {
                     offset += 1;
-                }
-                
+                }             
                 if i == 4 {
-                    offset+= 2;
+                    offset += 2;
                 }
                 if offset > 0 {
+                    #[cfg(not(debug_assertions))]
                     let _ = (*output).queue(MoveRight(offset));
                 }
             }
@@ -369,7 +399,7 @@ fn format_time(millis: i128, previous_millis: i128, format_width: usize, resolut
             }
         }
 
-        let _ = write!(output, "{}", fields.concat());
+        let _ = output.write_fmt(format_args!("{}", fields.concat()));
         
 
         // VERSION 2 -- Avg. total write time: ~0.9970945037976796ms
@@ -551,9 +581,9 @@ fn main() {
     let mut last = match clapargs.up {
         false => {
             if clapargs.instant {
-                instant_time_spent as i128
+                target-instant_time_spent as i128
             } else {
-                system_time_spent as i128
+                target-system_time_spent as i128
             }
         },
         true => target,
@@ -737,6 +767,10 @@ fn main() {
         if last < difference {
             let _ = stdout().write_all(b"\x07");
         }
+
+        #[cfg(debug_assertions)]
+        let _ = stdout().write_fmt(format_args!("difference: {}, last: {}\n", difference, last));
+
         last = difference;
     }
 
