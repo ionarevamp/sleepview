@@ -763,11 +763,6 @@ fn main() {
             system_time_start.elapsed().unwrap().as_millis()
         };
 
-        // check for consistency...
-        if last < difference {
-            let _ = stdout().write_all(b"\x07");
-        }
-
         #[cfg(debug_assertions)]
         let _ = stdout().write_fmt(format_args!("difference: {}, last: {}\n", difference, last));
 
