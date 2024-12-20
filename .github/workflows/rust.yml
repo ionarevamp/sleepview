@@ -16,5 +16,4 @@ jobs:
 
     steps:
     - uses: actions/checkout@v4
-    - name: Basic Test (10s)
     - run: cargo run --release -- 10 -r 30
