@@ -25,6 +25,7 @@ use clap::Parser;
 
 #[derive(Parser, Debug)]
 #[command(disable_help_flag(true))]
+#[repr(C)]
 struct Args {
     /// Switches
     #[arg(short, required(false), default_value_t=(false))]
@@ -59,6 +60,8 @@ struct Args {
 
 #[cfg(debug_assertions)]
 impl fmt::Display for Args {
+
+    #[inline(always)]
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         #[cfg(not(target_os = "windows"))]
         let new_line = "\n";
@@ -449,7 +452,7 @@ fn format_time(millis: i128, previous_millis: i128, format_width: usize, resolut
 //    format!("[{:0>2}:]{:0>2}:{:0>2}:{:0>2}.{:0>3}", days, hours, minutes, seconds, remaining)
 }
 
-
+#[inline(always)]
 fn main() {
    
     // Should be the first thing done for maximum accuracy
